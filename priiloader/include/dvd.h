@@ -59,6 +59,7 @@ typedef void (*apploader_entry)(apploader_init* init, apploader_main* main, appl
 #define DVD_RESETSOFT				1			//!< Performs a soft reset. FW restart and drive spinup
 #define DVD_RESETNONE				2			//!< Only initiate DI registers
 
+#define DVD_CMD_IDENTIFY			0x12
 #define DVD_CMD_READ_ID				0x70
 #define DVD_CMD_READ				0x71
 #define DVD_CMD_RESET_DRIVE			0x8A
@@ -93,6 +94,7 @@ s32 DVDUnencryptedRead(u32 offset, void* buf, u32 len);
 s32 DVDOpenPartition(u32 offset, void* eticket, void* shared_cert_in, u32 shared_cert_in_len, void* tmd_out );
 s32 DVDClosePartition();
 s32 DVDRead(off_t offset, u32 len, void* output);
+s32 DVDIdentify();
 s32 DVDExecuteCommand(u32 command, u8 do_async, void* input, s32 input_size, void* output, s32 output_size, ipccallback callback);
 s32 DVDExecuteVCommand(s32 command, bool do_async, s32 cnt_in, s32 cnt_io, void* cmd_input, u32 cmd_input_size, void* input, u32 input_size, ipccallback callback, void* userdata);
 

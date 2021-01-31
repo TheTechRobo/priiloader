@@ -39,8 +39,8 @@ u32 _di_lasterror[0x08] ATTRIBUTE_ALIGN(32);
 
 s32 di_fd = -1;
 s8 async_called = 0;
-ioctlv iovectors[8] = { 0 };
-u32 cmd[8] = { 0 };
+ioctlv iovectors[8] ATTRIBUTE_ALIGN(64) = { 0 };
+u32 cmd[8] ATTRIBUTE_ALIGN(64) = { 0 };
 
 
 //see https://wiibrew.org/wiki/Hardware/Drive_Interface for the address
@@ -164,7 +164,7 @@ s32 DVDOpenPartition(u32 offset, void* eticket, void* shared_cert_in, u32 shared
 	if (shared_cert_in != NULL && shared_cert_in_len > 0)
 		return -1;
 
-	ioctlv data[4];
+	ioctlv data[4] ATTRIBUTE_ALIGN(64);
 
 	data[0].data = eticket;
 	data[0].len = (eticket == NULL) ? 0 : 0x02A4;
@@ -201,6 +201,12 @@ s32 DVDRead(off_t offset, u32 len, void* output)
 		return ret;
 
 	return (ret == 1) ? ret : -ret;
+}
+
+s32 DVDIdentify()
+{
+	u8 dummy[0x20] [[gnu::aligned(64)]];
+	return DVDExecuteCommand(DVD_CMD_IDENTIFY, false, NULL, 0, dummy, 0x20, NULL);
 }
 
 s32 DVDExecuteVCommand(s32 command, bool do_async, s32 cnt_in, s32 cnt_io, void* cmd_input, u32 cmd_input_size, void* input, u32 input_size, ipccallback callback, void* userdata)

@@ -1207,11 +1207,12 @@ void BootDvdDrive(void)
 	apploader_init app_init = NULL;
 	apploader_main app_main = NULL;
 	apploader_final app_final = NULL;
-	dvd_main dvd_entry = NULL;
+	dvd_main dvd_entry [[gnu::noreturn]] = NULL;
 
 	ClearScreen();
 	PrintFormat(1, TEXT_OFFSET("Loading DVD..."), 208, "Loading DVD...");
 	gprintf("reading dvd...");
+	gprintf("framebuffer : 0x%08X", rmode);
 
 	try
 	{
@@ -1219,6 +1220,10 @@ void BootDvdDrive(void)
 		s32 ret = DVDResetDrive();
 		if (ret <= 0)
 			throw "Failed to Reset Drive (" + std::to_string(ret) + ")";
+
+		ret = DVDIdentify();
+		if (ret <= 0)
+			throw "Failed to Identify (" + std::to_string(ret) + ")";
 
 		memset((char*)0x80000000, 0, 0x20);
 		ICInvalidateRange((u32*)0x80000000, 0x20);
@@ -1277,6 +1282,7 @@ void BootDvdDrive(void)
 				continue;
 
 			bootGameInfo = &(partitionsInfo[index]);
+			break;
 		}
 
 		if (bootGameInfo == NULL)
@@ -1310,8 +1316,6 @@ void BootDvdDrive(void)
 			ShutdownDevices();
 			USB_Deinitialize();
 			ISFS_Deinitialize();
-			VIDEO_Flush();
-			VIDEO_WaitVSync();
 			DVDCloseHandle();
 			deinit = 1;
 
@@ -1333,6 +1337,10 @@ void BootDvdDrive(void)
 				throw "Failed to open Partition (" + std::to_string(ret) + ")";
 			partitionOpened = 1;
 		}
+
+		ret = DVDRead(0x00, 0x20, (void*)0x80000000);
+		if (ret <= 0)
+			throw "Failed to read partition header(" + std::to_string(ret) + ")";
 
 		apploader_hdr appldr_header ATTRIBUTE_ALIGN(32);
 		memset(&appldr_header, 0, sizeof(apploader_hdr));
@@ -1368,7 +1376,6 @@ void BootDvdDrive(void)
 			DCFlushRange(data, size);
 		}
 
-		DVDCloseHandle();
 		dvd_entry = (dvd_main)app_final();
 
 		if(dvd_entry == NULL || 0x80003000 > (u32)(dvd_entry) )
@@ -1378,7 +1385,7 @@ void BootDvdDrive(void)
 		//see memory map @ https://wiibrew.org/w/index.php?title=Memory_Map
 		//and @ https://www.gc-forever.com/yagcd/chap4.html#sec4
 		*(vu32*)0x80000020 = 0x0D15EA5E;				// Boot from DVD
-		*(vu32*)0x80000024 = 0x00000001;				// Boot from DVD
+		*(vu32*)0x80000024 = 0x00000001;				// Version
 		*(vu32*)0x80000028 = 0x01800000;				// Memory Size (Physical) 24MB
 		*(vu32*)0x8000002C = 0x00000023;				// Production Board Model
 		/**(vu32*)0x80000030 = 0x00000000;				// Arena Low
@@ -1418,15 +1425,25 @@ void BootDvdDrive(void)
 		//Deinit audio
 		*(vu32*)0xCD006C00 = 0x00000000;
 
+		DVDCloseHandle();
 		ClearScreen();
+		VIDEO_Configure(VIDEO_GetPreferredMode(NULL));
+		VIDEO_SetNextFramebuffer(xfb);
+		VIDEO_SetBlack(FALSE);
 		VIDEO_Flush();
 		VIDEO_WaitVSync();
 		if (rmode->viTVMode & VI_NON_INTERLACE) VIDEO_WaitVSync();
-
 		gprintf("booting binary (0x%08X)...", dvd_entry);
-		asm("isync");
+		__IOS_ShutdownSubsystems();
+		if (system_state.Init)
+		{
+			VIDEO_Flush();
+			VIDEO_WaitVSync();
+		}
+		__exception_closeall();
+		ICSync();
 		dvd_entry();
-		//((void (*)())((u32)entrypoint))();
+
 		gprintf("oh ow, this ain't good...");
 	}
 	catch (const std::string & ex)
