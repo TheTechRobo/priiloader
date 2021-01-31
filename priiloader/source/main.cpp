@@ -39,6 +39,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <ogc/usb.h>
 #include <ogc/machine/processor.h>
 #include <ogc/machine/asm.h>
+#include <ogc/lwp_watchdog.h>
 
 #include <sys/dir.h>
 #include <vector>
@@ -1212,7 +1213,6 @@ void BootDvdDrive(void)
 	ClearScreen();
 	PrintFormat(1, TEXT_OFFSET("Loading DVD..."), 208, "Loading DVD...");
 	gprintf("reading dvd...");
-	gprintf("framebuffer : 0x%08X", rmode);
 
 	try
 	{
@@ -1425,6 +1425,7 @@ void BootDvdDrive(void)
 		//Deinit audio
 		*(vu32*)0xCD006C00 = 0x00000000;
 
+		settime(secs_to_ticks(time(NULL) - 946684800));
 		DVDCloseHandle();
 		ClearScreen();
 		VIDEO_Configure(VIDEO_GetPreferredMode(NULL));
@@ -1434,15 +1435,17 @@ void BootDvdDrive(void)
 		VIDEO_WaitVSync();
 		if (rmode->viTVMode & VI_NON_INTERLACE) VIDEO_WaitVSync();
 		gprintf("booting binary (0x%08X)...", dvd_entry);
+		u32 level;
+		//__STM_Close();
 		__IOS_ShutdownSubsystems();
-		if (system_state.Init)
-		{
-			VIDEO_Flush();
-			VIDEO_WaitVSync();
-		}
+		//SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
 		__exception_closeall();
+		_CPU_ISR_Disable (level);
+		mtmsr(mfmsr() & ~0x8000);
+		mtmsr(mfmsr() | 0x2002);
 		ICSync();
 		dvd_entry();
+		_CPU_ISR_Restore (level);
 
 		gprintf("oh ow, this ain't good...");
 	}
